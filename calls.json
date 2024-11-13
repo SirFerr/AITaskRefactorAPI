@@ -1,0 +1,137 @@
+{
+  "info": {
+    "name": "Text Generation API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": "1.0"
+  },
+  "item": [
+    {
+      "name": "Request Text Generation",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "http://127.0.0.1:8000/generate/request?max_tokens=100",
+          "host": [
+            "http://127.0.0.1"
+          ],
+          "port": "8000",
+          "path": [
+            "generate",
+            "request"
+          ],
+          "query": [
+            {
+              "key": "max_tokens",
+              "value": "100"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{}"
+        }
+      }
+    },
+    {
+      "name": "Get Generation Status",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "http://127.0.0.1:8000/generate/status?request_id=YOUR_REQUEST_ID",
+          "host": [
+            "http://127.0.0.1"
+          ],
+          "port": "8000",
+          "path": [
+            "generate",
+            "status"
+          ],
+          "query": [
+            {
+              "key": "request_id",
+              "value": "YOUR_REQUEST_ID"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Preview Generated Text",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "http://127.0.0.1:8000/generate/preview?request_id=YOUR_REQUEST_ID",
+          "host": [
+            "http://127.0.0.1"
+          ],
+          "port": "8000",
+          "path": [
+            "generate",
+            "preview"
+          ],
+          "query": [
+            {
+              "key": "request_id",
+              "value": "YOUR_REQUEST_ID"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Finalize Generation",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "http://127.0.0.1:8000/generate/finalize?request_id=YOUR_REQUEST_ID&apply=true",
+          "host": [
+            "http://127.0.0.1"
+          ],
+          "port": "8000",
+          "path": [
+            "generate",
+            "finalize"
+          ],
+          "query": [
+            {
+              "key": "request_id",
+              "value": "YOUR_REQUEST_ID"
+            },
+            {
+              "key": "apply",
+              "value": "true"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{}"
+        }
+      }
+    }
+  ]
+}

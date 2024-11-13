@@ -1,0 +1,8 @@
+# Default ignored files
+/../../AITaskRefactorAPI /.idea/shelf/
+/../../AITaskRefactorAPI /.idea/workspace.xml
+# Editor-based HTTP Client requests
+/../../AITaskRefactorAPI /.idea/httpRequests/
+# Datasource local storage ignored files
+/../../AITaskRefactorAPI /.idea/dataSources/
+/../../AITaskRefactorAPI /.idea/dataSources.local.xml
