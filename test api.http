@@ -1,0 +1,31 @@
+### POST request to generate text
+POST http://localhost:8000/generate/request?max_tokens=100
+Content-Type: application/json
+
+{
+  "text":  "нужно создать клиент на kotlin с функционалом tinder"
+}
+
+###
+
+
+
+### GET request to check generation status
+
+GET http://localhost:8000/generate/status?request_id=1
+Content-Type: application/json
+
+###
+
+### GET request to preview generated text
+GET http://localhost:8000/generate/preview?request_id=1
+Content-Type: application/json
+
+###
+
+### POST request to finalize generation
+POST http://localhost:8000/generate/finalize?request_id=1&apply=true
+Content-Type: application/json
+
+{}
+###
