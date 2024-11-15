@@ -2,13 +2,13 @@
 FROM python:3.12
 
 # Устанавливаем рабочую директорию
-WORKDIR /app
+WORKDIR /app_noti
 
 # Копируем все файлы из корневой директории проекта в контейнер
-COPY ../ /app
+COPY ../ /app_noti
 
 # Устанавливаем зависимости
-RUN pip install --no-cache-dir -r /app/docker/requirements.txt
+RUN pip install --no-cache-dir -r /app_noti/docker/requirements.txt
 
 # Открываем порт для FastAPI приложения
 EXPOSE 8002

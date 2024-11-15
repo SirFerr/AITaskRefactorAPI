@@ -25,7 +25,7 @@ services:
       - "8001:8001"
     environment:
       - DATABASE_URL=postgresql://admin:admin@db:5432/generation_db
-      - RABBITMQ_URL=amqp://guest:guest@localhost/
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq/
     depends_on:
       - db
       - rabbitmq
@@ -34,25 +34,29 @@ services:
     volumes:
       - ..:/app  # Монтируем весь проект в контейнер
 
-#  # Сервис для Notification Service (с уведомлениями)
-#  notification_service:
-#    build:
-#      context: .
-#      dockerfile: ./docker/Dockerfile.notification.yml  # Новый Dockerfile для Notification сервиса
-#    container_name: notification_service
-#    ports:
-#      - "8002:8002"  # Порт, через который WebSocket будет доступен
-#    depends_on:
-#      - rabbitmq
-#    networks:
-#      - app-network
-#  rabbitmq:
-#    image: rabbitmq:3-management
-#    ports:
-#      - "5672:5672"
-#      - "15672:15672"
-#    networks:
-#      - app-network
+  # Сервис для Notification Service (с уведомлениями)
+  notification_service:
+    build:
+      context: ..
+      dockerfile: ./docker/Dockerfile.notification.yml  # Новый Dockerfile для Notification сервиса
+    container_name: notification_service
+    ports:
+      - "8002:8002"  # Порт, через который WebSocket будет доступен
+    environment:
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq/
+    depends_on:
+      - rabbitmq
+    networks:
+      - app-network
+    volumes:
+      - ..:/app_noti  # Монтируем весь проект в контейнер
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      - app-network
 
 
 networks:
