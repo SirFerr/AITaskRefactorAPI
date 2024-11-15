@@ -1,3 +1,4 @@
+import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -64,3 +65,7 @@ async def websocket_endpoint(websocket: WebSocket):
     except WebSocketDisconnect:
         active_connections.remove(websocket)
         print("Client disconnected")
+
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="localhost", port=8002)
