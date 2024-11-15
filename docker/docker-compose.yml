@@ -43,13 +43,14 @@ services:
     ports:
       - "8002:8002"  # Порт, через который WebSocket будет доступен
     environment:
-      - RABBITMQ_URL=amqp://guest:guest@rabbitmq/
+      - RABBITMQ_URL = "amqp://guest:guest@rabbitmq/"
     depends_on:
       - rabbitmq
     networks:
       - app-network
     volumes:
       - ..:/app_noti  # Монтируем весь проект в контейнер
+
   rabbitmq:
     image: rabbitmq:3-management
     ports:
