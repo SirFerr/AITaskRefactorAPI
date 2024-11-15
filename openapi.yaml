@@ -1,0 +1,148 @@
+openapi: 3.0.0
+info:
+  title: AI Task Refactor API
+  version: 1.0.0
+  description: API для улучшения текста задач с функциями отслеживания статуса, предпросмотра и подтверждения улучшений.
+
+paths:
+  /generate/request:
+    post:
+      summary: Request text generation
+      description: Запрос на улучшение текста задачи. Возвращает идентификатор запроса на генерацию текста.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                text:
+                  type: string
+                  description: Оригинальный текст задачи
+                max_tokens:
+                  type: integer
+                  description: Максимальное количество токенов для генерации
+                  default: 10000
+      responses:
+        '200':
+          description: Запрос на генерацию текста успешно принят
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  request_id:
+                    type: string
+                    description: Идентификатор запроса на генерацию текста
+        '400':
+          description: Неверный запрос
+
+  /generate/status:
+    get:
+      summary: Get generation status
+      description: Получить статус запроса на генерацию текста.
+      parameters:
+        - name: request_id
+          in: query
+          required: true
+          description: Идентификатор запроса на генерацию текста
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Статус запроса
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    description: Статус запроса на генерацию текста
+        '404':
+          description: Запрос не найден
+
+  /generate/preview:
+    get:
+      summary: Preview generated text
+      description: Предпросмотр улучшенного текста задачи по идентификатору запроса на генерацию текста.
+      parameters:
+        - name: request_id
+          in: query
+          required: true
+          description: Идентификатор запроса на генерацию текста
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Успех, предпросмотр улучшенного текста
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  preview_text:
+                    type: string
+                    description: Сгенерированный текст задачи
+        '404':
+          description: Запрос не найден
+        '400':
+          description: Генерация текста еще не завершена
+
+  /generate/finalize:
+    post:
+      summary: Finalize generation
+      description: Применить или отклонить предложенное улучшение текста задачи.
+      parameters:
+        - name: request_id
+          in: query
+          required: true
+          description: Идентификатор запроса на генерацию текста
+          schema:
+            type: string
+        - name: apply
+          in: query
+          required: true
+          description: Указывает, применять улучшение (true) или отклонить (false)
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Генерация текста завершена
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    description: Статус завершения генерации текста
+        '404':
+          description: Запрос не найден
+
+  /generate/all:
+    get:
+      summary: Get all generation requests
+      description: Получить все запросы на генерацию текста.
+      responses:
+        '200':
+          description: Список всех запросов на генерацию текста
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    date:
+                      type: string
+                      format: date-time
+                    user_text:
+                      type: string
+                    generated_text:
+                      type: string
+                      nullable: true
+                    status:
+                      type: string
