@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  # Сервис для PostgreSQL
+  db:
+    image: postgres:13
+    container_name: generation_db
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: generation_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - app-network
+
+  # Сервис для FastAPI приложения
+  app:
+    build:
+      context: ..
+      dockerfile: ./docker/Dockerfile
+    container_name: fastapi_app
+    ports:
+      - "8001:8001"
+    environment:
+      - DATABASE_URL=postgresql://admin:admin@db:5432/generation_db
+    depends_on:
+      - db
+    networks:
+      - app-network
+    volumes:
+      - ..:/app  # Монтируем весь проект в контейнер
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local

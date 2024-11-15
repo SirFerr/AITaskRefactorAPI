@@ -1,66 +1,50 @@
-from fastapi import FastAPI, HTTPException, Query, BackgroundTasks
-from typing import Optional
-from pydantic import BaseModel
 import uuid
-import os
-import json
-import requests
+import datetime
 import uvicorn
+from fastapi import FastAPI, HTTPException, BackgroundTasks
+from pydantic import BaseModel
+from sqlalchemy import create_engine, Column, String, Text, DateTime
+from sqlalchemy.orm import declarative_base, sessionmaker
+from huggingface_hub import InferenceClient
 
+# Настройки базы данных PostgreSQL
+DATABASE_URL = "postgresql://admin:admin@db:5432/generation_db"
+
+# Настройки SQLAlchemy
+engine = create_engine(DATABASE_URL)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
+
+# Модель таблицы для хранения запросов на генерацию текста
+class GenerationRequest(Base):
+    __tablename__ = "generation_requests"
+
+    id = Column(String, primary_key=True, index=True)
+    date = Column(DateTime, default=datetime.datetime.utcnow)
+    user_text = Column(Text, nullable=False)
+    generated_text = Column(Text, nullable=True)
+    status = Column(String, default="in_progress")
+
+# Инициализация базы данных
+Base.metadata.create_all(bind=engine)
+
+# Инициализация клиента Hugging Face
+client = InferenceClient(api_key="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")
+
+# Инициализация FastAPI приложения
 app = FastAPI()
 
-# URL и заголовки для использования Qwen модели
-API_URL = "https://api-inference.huggingface.co/models/Qwen/Qwen2.5-Coder-32B-Instruct"
-HEADERS = {"Authorization": "Bearer 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"}
+# Значение по умолчанию для промта
+DEFAULT_PROMPT = """Переформулируй задачу более четко, следуя этим правилам:
+1. Опиши основную цель задачи кратко и ясно.
+2. Разбей задачу на несколько логически связанных подзадач, чтобы они могли выполняться последовательно.
+3. Каждая подзадача должна содержать конкретные шаги для выполнения.
+4. Не повторяй исходную задачу, а переформулируй ее для большей ясности."""
 
-# Файлы для хранения ID запросов и запросов генерации
-REQUEST_IDS_FILE = "request_ids.json"
-GENERATION_REQUESTS_FILE = "generation_requests.json"
-
-
-# Функция для загрузки ID запросов из файла
-def load_request_ids():
-    if os.path.exists(REQUEST_IDS_FILE):
-        with open(REQUEST_IDS_FILE, "r") as file:
-            return json.load(file)
-    return []
-
-
-# Функция для сохранения ID запросов в файл
-def save_request_ids(request_ids):
-    with open(REQUEST_IDS_FILE, "w") as file:
-        json.dump(request_ids, file)
-
-
-# Функция для загрузки запросов генерации из файла
-def load_generation_requests():
-    if os.path.exists(GENERATION_REQUESTS_FILE):
-        with open(GENERATION_REQUESTS_FILE, "r") as file:
-            return json.load(file)
-    return {}
-
-
-# Функция для сохранения запросов генерации в файл
-def save_generation_requests():
-    with open(GENERATION_REQUESTS_FILE, "w") as file:
-        json.dump(generation_requests, file)
-
-
-# Инициализация ID запросов и запросов генерации
-request_ids = load_request_ids()
-generation_requests = load_generation_requests()
-
-DEFAULT_PROMPT = "Сделай задачу более четкой и выдели явные подзадачи."
-
-
+# Модель для запроса на генерацию текста
 class TextRequest(BaseModel):
     text: str
-    max_tokens: int = 100
-
-
-@app.get("/")
-def read_root():
-    return {"message": "Hello World"}
+    max_tokens: int = 10000
 
 
 # Ручка для создания запроса на генерацию текста
@@ -68,100 +52,121 @@ def read_root():
 async def request_text_generation(request: TextRequest, background_tasks: BackgroundTasks):
     request_id = str(uuid.uuid4())
 
-    generation_requests[request_id] = {
-        "prompt": DEFAULT_PROMPT,
-        "user_text": request.text,
-        "max_tokens": request.max_tokens,
-        "status": "in_progress",
-        "generated_text": None
-    }
+    # Сохранение запроса в базу данных
+    db = SessionLocal()
+    new_request = GenerationRequest(
+        id=request_id,
+        user_text=request.text,
+        status="in_progress"
+    )
+    db.add(new_request)
+    db.commit()
+    db.close()
 
-    # Добавляем request_id в список и сохраняем его
-    request_ids.append(request_id)
-    save_request_ids(request_ids)
-    save_generation_requests()  # Сохранение обновленного словаря generation_requests
-
-    # Запуск генерации текста в фоне
+    # Запуск задачи генерации текста в фоне
     background_tasks.add_task(generate_text, request_id)
-
     return {"request_id": request_id}
 
-
+# Функция для генерации текста
 def generate_text(request_id: str):
-    request_data = generation_requests.get(request_id)
+    db = SessionLocal()
+    request_data = db.query(GenerationRequest).filter(GenerationRequest.id == request_id).first()
     if not request_data:
         return
 
     try:
-        # Запрос к API Hugging Face
-        response = requests.post(
-            API_URL,
-            headers=HEADERS,
-            json={
-                "inputs": f"{request_data['prompt']} {request_data['user_text']}",
-                "parameters": {"max_length": request_data["max_tokens"]}
-            }
+        # Разделение на промт и пользовательский текст
+        prompt = DEFAULT_PROMPT
+        user_input = request_data.user_text
+
+        # Формирование сообщений
+        messages = [
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": user_input}
+        ]
+
+        # Запрос к Hugging Face для генерации текста с потоковой передачей
+        stream = client.chat.completions.create(
+            model="Qwen/Qwen2.5-Coder-32B-Instruct",
+            messages=messages,
+            max_tokens=10000,
+            stream=True
         )
-        result = response.json()
 
-        # Проверка, является ли результат списком, и выбор первого элемента, если это так
-        if isinstance(result, list):
-            result = result[0]
+        generated_text = ""
+        for chunk in stream:
+            generated_text += chunk.choices[0].delta.content
 
-        # Сохранение сгенерированного текста
-        request_data["generated_text"] = result.get("generated_text", "Ошибка при генерации текста")
-        request_data["status"] = "completed"
+        # Сохранение результата
+        request_data.generated_text = generated_text
+        request_data.status = "completed"
     except Exception as e:
-        request_data["status"] = "failed"
-        request_data["error"] = str(e)
+        request_data.status = "failed"
+        print(f"Error generating text: {e}")
 
-    # Сохранение обновленного состояния
-
+    db.commit()
+    db.close()
 
 # Ручка для получения статуса генерации текста
 @app.get("/generate/status")
-async def get_generation_status(
-        request_id: str = Query(..., description="Идентификатор запроса для получения статуса генерации.")
-):
-    request_data = generation_requests.get(request_id)
+async def get_generation_status(request_id: str):
+    db = SessionLocal()
+    request_data = db.query(GenerationRequest).filter(GenerationRequest.id == request_id).first()
+    db.close()
+
     if not request_data:
         raise HTTPException(status_code=404, detail="Запрос не найден")
-    return {"status": request_data["status"]}
-
+    return {"status": request_data.status}
 
 # Ручка для предпросмотра сгенерированного текста
 @app.get("/generate/preview")
-async def preview_generated_text(
-        request_id: str = Query(..., description="Идентификатор запроса для предпросмотра сгенерированного текста.")
-):
-    request_data = generation_requests.get(request_id)
+async def preview_generated_text(request_id: str):
+    db = SessionLocal()
+    request_data = db.query(GenerationRequest).filter(GenerationRequest.id == request_id).first()
+    db.close()
+
     if not request_data:
         raise HTTPException(status_code=404, detail="Запрос не найден")
-    if request_data["status"] != "completed":
+    if request_data.status != "completed":
         raise HTTPException(status_code=400, detail="Генерация текста еще не завершена")
-    return {"preview_text": request_data["generated_text"]}
-
+    return {"preview_text": request_data.generated_text}
 
 # Ручка для подтверждения или отмены генерации текста
 @app.post("/generate/finalize")
-async def finalize_generation(
-        request_id: str = Query(..., description="Идентификатор запроса для финализации генерации текста."),
-        apply: bool = Query(..., description="Флаг для подтверждения применения сгенерированного текста.")
-):
-    request_data = generation_requests.get(request_id)
+async def finalize_generation(request_id: str, apply: bool):
+    db = SessionLocal()
+    request_data = db.query(GenerationRequest).filter(GenerationRequest.id == request_id).first()
+
     if not request_data:
+        db.close()
         raise HTTPException(status_code=404, detail="Запрос не найден")
 
     if apply:
-        return {"status": "Text generation applied", "final_text": request_data["generated_text"]}
+        request_data.status = "approved"
     else:
-        # Удаление запроса при отказе
-        del generation_requests[request_id]
-        request_ids.remove(request_id)
-        save_request_ids(request_ids)
-        save_generation_requests()  # Сохранение обновленного состояния после удаления запроса
-        return {"status": "Text generation discarded", "final_text": None}
+        request_data.status = "rejected"
 
+    db.commit()
+    db.close()
+    return {"status": f"Text generation {'applied' if apply else 'discarded'}"}
+
+# Ручка для получения всех данных из базы данных
+@app.get("/generate/all")
+async def get_all_requests():
+    db = SessionLocal()
+    requests = db.query(GenerationRequest).all()
+    db.close()
+
+    return [
+        {
+            "id": request.id,
+            "date": request.date,
+            "user_text": request.user_text,
+            "generated_text": request.generated_text,
+            "status": request.status
+        }
+        for request in requests
+    ]
 
 if __name__ == "__main__":
     uvicorn.run(app, host="localhost", port=8001)

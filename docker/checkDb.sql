@@ -1,0 +1,1 @@
+SELECT * From generation_requests;

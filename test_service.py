@@ -4,7 +4,7 @@ import time
 # Базовый URL для запросов
 base_url = "http://localhost:8001/generate"
 
-def generate_text(text, max_tokens=100):
+def generate_text(text, max_tokens=1000):
     # POST запрос для инициирования генерации текста
     response = requests.post(
         f"{base_url}/request",
@@ -52,11 +52,10 @@ def finalize_generation(request_id, apply=True):
 
 def main():
     # Текст для генерации и настройки max_tokens
-    text_to_generate = "нужно создать клиент на kotlin с функционалом tinder"
-    max_tokens = 100
+    text_to_generate = "нужно создать клиент на kotlin с функционалом tinder  "
 
     # Шаг 1: Инициация запроса на генерацию текста
-    request_id = generate_text(text_to_generate, max_tokens)
+    request_id = generate_text(text_to_generate)
     if not request_id:
         return
 
