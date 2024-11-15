@@ -6,6 +6,8 @@ from pydantic import BaseModel
 from sqlalchemy import create_engine, Column, String, Text, DateTime
 from sqlalchemy.orm import declarative_base, sessionmaker
 from huggingface_hub import InferenceClient
+import aio_pika
+import asyncio
 
 # Настройки базы данных PostgreSQL
 DATABASE_URL = "postgresql://admin:admin@db:5432/generation_db"
@@ -34,6 +36,19 @@ client = InferenceClient(api_key="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")
 # Инициализация FastAPI приложения
 app = FastAPI()
 
+# Настройки RabbitMQ
+RABBITMQ_URL = "amqp://guest:guest@rabbitmq/"
+
+async def send_notification(event: str, message: str):
+    """Отправка уведомлений в RabbitMQ."""
+    connection = await aio_pika.connect_robust(RABBITMQ_URL)
+    async with connection:
+        channel = await connection.channel()
+        await channel.default_exchange.publish(
+            aio_pika.Message(body=f'{{"event": "{event}", "message": "{message}"}}'.encode()),
+            routing_key="notifications"
+        )
+
 # Значение по умолчанию для промта
 DEFAULT_PROMPT = """Переформулируй задачу более четко, следуя этим правилам:
 1. Опиши основную цель задачи кратко и ясно.
@@ -47,9 +62,9 @@ class TextRequest(BaseModel):
     max_tokens: int = 10000
 
 
-# Ручка для создания запроса на генерацию текста
 @app.post("/generate/request")
 async def request_text_generation(request: TextRequest, background_tasks: BackgroundTasks):
+    """Создание нового запроса на генерацию текста."""
     request_id = str(uuid.uuid4())
 
     # Сохранение запроса в базу данных
@@ -67,8 +82,9 @@ async def request_text_generation(request: TextRequest, background_tasks: Backgr
     background_tasks.add_task(generate_text, request_id)
     return {"request_id": request_id}
 
-# Функция для генерации текста
+
 def generate_text(request_id: str):
+    """Фоновая задача для генерации текста."""
     db = SessionLocal()
     request_data = db.query(GenerationRequest).filter(GenerationRequest.id == request_id).first()
     if not request_data:
@@ -107,20 +123,27 @@ def generate_text(request_id: str):
     db.commit()
     db.close()
 
-# Ручка для получения статуса генерации текста
+
 @app.get("/generate/status")
 async def get_generation_status(request_id: str):
+    """Получение статуса генерации текста."""
     db = SessionLocal()
     request_data = db.query(GenerationRequest).filter(GenerationRequest.id == request_id).first()
     db.close()
 
     if not request_data:
         raise HTTPException(status_code=404, detail="Запрос не найден")
+
+    if request_data.status == "failed":
+        send_notification("Refactor failed",f"Refactor {request_id} failed.")
+    if request_data.status == "completed":
+        send_notification("Refactor complete",f"Refactor {request_id} has been completed.")
     return {"status": request_data.status}
 
-# Ручка для предпросмотра сгенерированного текста
+
 @app.get("/generate/preview")
 async def preview_generated_text(request_id: str):
+    """Получение предварительного результата генерации текста."""
     db = SessionLocal()
     request_data = db.query(GenerationRequest).filter(GenerationRequest.id == request_id).first()
     db.close()
@@ -129,11 +152,13 @@ async def preview_generated_text(request_id: str):
         raise HTTPException(status_code=404, detail="Запрос не найден")
     if request_data.status != "completed":
         raise HTTPException(status_code=400, detail="Генерация текста еще не завершена")
+
     return {"preview_text": request_data.generated_text}
 
-# Ручка для подтверждения или отмены генерации текста
+
 @app.post("/generate/finalize")
 async def finalize_generation(request_id: str, apply: bool):
+    """Подтверждение или отмена сгенерированного текста."""
     db = SessionLocal()
     request_data = db.query(GenerationRequest).filter(GenerationRequest.id == request_id).first()
 
@@ -143,16 +168,19 @@ async def finalize_generation(request_id: str, apply: bool):
 
     if apply:
         request_data.status = "approved"
+        await send_notification("Refactor Approved", f"Refactor {request_id} has been approved.")
     else:
         request_data.status = "rejected"
+        await send_notification("Refactor Rejected", f"Refactor {request_id} has been rejected.")
 
     db.commit()
     db.close()
     return {"status": f"Text generation {'applied' if apply else 'discarded'}"}
 
-# Ручка для получения всех данных из базы данных
+
 @app.get("/generate/all")
 async def get_all_requests():
+    """Получение всех запросов из базы данных."""
     db = SessionLocal()
     requests = db.query(GenerationRequest).all()
     db.close()
@@ -167,6 +195,7 @@ async def get_all_requests():
         }
         for request in requests
     ]
+
 
 if __name__ == "__main__":
     uvicorn.run(app, host="localhost", port=8001)

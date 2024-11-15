@@ -11,7 +11,7 @@ COPY ../ /app
 RUN pip install --no-cache-dir -r /app/docker/requirements.txt
 
 # Открываем порт для FastAPI приложения
-EXPOSE 8001
+EXPOSE 8002
 
-# Команда для запуска приложения
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8001"]
+# Запускаем сервер
+CMD ["uvicorn", "notification_service:app", "--host", "0.0.0.0", "--port", "8002"]
