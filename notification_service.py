@@ -1,5 +1,5 @@
 import uvicorn
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, BackgroundTasks
 import aio_pika
 import asyncio
 import json
@@ -14,66 +14,64 @@ QUEUE_NAME = "notifications"
 # Файл для хранения уведомлений
 NOTIFICATIONS_FILE = Path("notifications.json")
 
-# Список активных WebSocket-подключений
-active_connections = []
-
 # Инициализация файла
 if not NOTIFICATIONS_FILE.exists():
     NOTIFICATIONS_FILE.write_text("[]")
 
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 
 async def consume_notifications():
-    """Потребляет уведомления из RabbitMQ и сохраняет их в файл."""
-    try:
-        connection = await aio_pika.connect_robust(RABBITMQ_URL)
-        channel = await connection.channel()
-        queue = await channel.declare_queue(QUEUE_NAME, durable=True)
+    """Потребляет уведомления из RabbitMQ, сохраняет их в файл и выводит в консоль."""
+    print("Потребитель запущен...")
+    while True:
+        try:
+            connection = await aio_pika.connect_robust(RABBITMQ_URL)
+            channel = await connection.channel()
+            queue = await channel.declare_queue(QUEUE_NAME, durable=True)
 
-        print(" [*] Ожидание уведомлений из RabbitMQ.")
+            logger.info(" [*] Ожидание уведомлений из RabbitMQ.")
+            
+            async for message in queue:
+                async with message.process():
+                    try:
+                        logger.info("Сообщение получено!")
 
-        async for message in queue:
-            async with message.process():
-                try:
-                    notification_data = json.loads(message.body)
+                        notification_data = json.loads(message.body)
 
-                    # Сохраняем уведомление в файл
-                    current_notifications = json.loads(NOTIFICATIONS_FILE.read_text())
-                    current_notifications.append(notification_data)
-                    NOTIFICATIONS_FILE.write_text(json.dumps(current_notifications, indent=4))
+                        # Сохраняем уведомление в файл
+                        current_notifications = json.loads(NOTIFICATIONS_FILE.read_text())
+                        current_notifications.append(notification_data)
+                        NOTIFICATIONS_FILE.write_text(json.dumps(current_notifications, indent=4))
 
-                    # Отправляем уведомление активным WebSocket-клиентам
-                    for connection in active_connections:
-                        await connection.send_text(json.dumps(notification_data))
-                except Exception as e:
-                    print(f"Ошибка обработки сообщения: {e}")
-    except Exception as e:
-        print(f"Ошибка подключения к RabbitMQ: {e}")
+                        logger.info(f"Получено уведомление: {notification_data}")
+                    except Exception as e:
+                        logger.error(f"Ошибка обработки сообщения: {e}")
+        except Exception as e:
+            print(f"Ошибка подключения к RabbitMQ: {e}. Повторная попытка через 5 секунд...")
+            await asyncio.sleep(5)
+
+
+
 
 
 @app.on_event("startup")
 async def startup():
-    """Запускает задачу потребления уведомлений при старте приложения."""
-    asyncio.create_task(consume_notifications())
+    try:
+        logger.info("Приложение запускается...")
+        await consume_notifications()
+    except Exception as e:
+        logger.error(f"Ошибка при запуске приложения: {e}")
+
 
 
 @app.get("/notifications")
 async def get_notifications():
     """Возвращает список уведомлений из файла."""
-    return json.loads(NOTIFICATIONS_FILE.read_text())
-
-
-@app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    """Обрабатывает WebSocket подключения."""
-    await websocket.accept()
-    active_connections.append(websocket)
     try:
-        while True:
-            await asyncio.sleep(3600)  # Поддерживаем соединение активным
-    except WebSocketDisconnect:
-        active_connections.remove(websocket)
-        print("Клиент отключился")
-
-
-if __name__ == "__main__":
-    uvicorn.run(app, host="localhost", port=8002)
+        return json.loads(NOTIFICATIONS_FILE.read_text())
+    except Exception as e:
+        return {"error": f"Ошибка чтения уведомлений: {e}"}

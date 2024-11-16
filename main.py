@@ -78,12 +78,15 @@ async def request_text_generation(request: TextRequest, background_tasks: Backgr
     db.commit()
     db.close()
 
+    # Отправка уведомления о создании нового запроса
+    await send_notification("Request Created", f"Request {request_id} has been created.")
+
     # Запуск задачи генерации текста в фоне
     background_tasks.add_task(generate_text, request_id)
     return {"request_id": request_id}
 
 
-def generate_text(request_id: str):
+async def generate_text(request_id: str):
     """Фоновая задача для генерации текста."""
     db = SessionLocal()
     request_data = db.query(GenerationRequest).filter(GenerationRequest.id == request_id).first()
@@ -116,12 +119,13 @@ def generate_text(request_id: str):
         # Сохранение результата
         request_data.generated_text = generated_text
         request_data.status = "completed"
+        await send_notification("Request Completed", f"Request {request_id} has been completed.")
     except Exception as e:
         request_data.status = "failed"
-        print(f"Error generating text: {e}")
-
-    db.commit()
-    db.close()
+        await send_notification("Request Failed", f"Request {request_id} failed with error: {e}")
+    finally:
+        db.commit()
+        db.close()
 
 
 @app.get("/generate/status")
@@ -134,10 +138,9 @@ async def get_generation_status(request_id: str):
     if not request_data:
         raise HTTPException(status_code=404, detail="Запрос не найден")
 
-    if request_data.status == "failed":
-        send_notification("Refactor failed",f"Refactor {request_id} failed.")
-    if request_data.status == "completed":
-        send_notification("Refactor complete",f"Refactor {request_id} has been completed.")
+    # Отправка уведомления о проверке статуса
+    await send_notification("Status Checked", f"Status of request {request_id} was checked.")
+
     return {"status": request_data.status}
 
 
@@ -152,6 +155,9 @@ async def preview_generated_text(request_id: str):
         raise HTTPException(status_code=404, detail="Запрос не найден")
     if request_data.status != "completed":
         raise HTTPException(status_code=400, detail="Генерация текста еще не завершена")
+
+    # Отправка уведомления о просмотре результата
+    await send_notification("Preview Accessed", f"Preview of request {request_id} was accessed.")
 
     return {"preview_text": request_data.generated_text}
 
@@ -168,10 +174,10 @@ async def finalize_generation(request_id: str, apply: bool):
 
     if apply:
         request_data.status = "approved"
-        await send_notification("Refactor Approved", f"Refactor {request_id} has been approved.")
+        await send_notification("Request Approved", f"Request {request_id} has been approved.")
     else:
         request_data.status = "rejected"
-        await send_notification("Refactor Rejected", f"Refactor {request_id} has been rejected.")
+        await send_notification("Request Rejected", f"Request {request_id} has been rejected.")
 
     db.commit()
     db.close()
@@ -184,6 +190,9 @@ async def get_all_requests():
     db = SessionLocal()
     requests = db.query(GenerationRequest).all()
     db.close()
+
+    # Отправка уведомления о запросе всех данных
+    await send_notification("All Requests Accessed", "All generation requests have been accessed.")
 
     return [
         {
