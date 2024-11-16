@@ -1,0 +1,59 @@
+openapi: 3.0.0
+info:
+  title: Notification Service API
+  version: 1.0.0
+  description: API для работы с уведомлениями, включающая получение списка уведомлений и управление очередью сообщений.
+
+paths:
+  /notifications:
+    get:
+      summary: Get all notifications
+      description: Возвращает список всех уведомлений, сохраненных в файле.
+      responses:
+        '200':
+          description: Список уведомлений успешно получен
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      description: Идентификатор уведомления
+                    message:
+                      type: string
+                      description: Текст уведомления
+                    timestamp:
+                      type: string
+                      format: date-time
+                      description: Время получения уведомления
+        '500':
+          description: Ошибка при чтении уведомлений
+
+  /notifications/consume:
+    post:
+      summary: Start consuming notifications
+      description: Запускает процесс потребления уведомлений из очереди RabbitMQ.
+      responses:
+        '200':
+          description: Потребление уведомлений успешно запущено
+        '500':
+          description: Ошибка при подключении к RabbitMQ или обработке сообщений
+
+components:
+  schemas:
+    Notification:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Уникальный идентификатор уведомления
+        message:
+          type: string
+          description: Содержимое уведомления
+        timestamp:
+          type: string
+          format: date-time
+          description: Время получения уведомления

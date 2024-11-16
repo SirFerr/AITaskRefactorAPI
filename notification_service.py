@@ -34,7 +34,7 @@ async def consume_notifications():
             queue = await channel.declare_queue(QUEUE_NAME, durable=True)
 
             logger.info(" [*] Ожидание уведомлений из RabbitMQ.")
-            
+
             async for message in queue:
                 async with message.process():
                     try:
@@ -62,7 +62,8 @@ async def consume_notifications():
 async def startup():
     try:
         logger.info("Приложение запускается...")
-        await consume_notifications()
+        # Запускаем consume_notifications как фоновую задачу
+        asyncio.create_task(consume_notifications())
     except Exception as e:
         logger.error(f"Ошибка при запуске приложения: {e}")
 
