@@ -9,7 +9,7 @@ def generate_text(text, max_tokens=1000):
     response = requests.post(
         f"{base_url}/request",
         headers={"Content-Type": "application/json"},
-        json={"text": text, "max_tokens": max_tokedns}
+        json={"text": text, "max_tokens": max_tokens}
     )
     response_data = response.json()
     request_id = response_data.get("request_id")

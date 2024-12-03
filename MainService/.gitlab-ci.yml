@@ -1,0 +1,46 @@
+stages:
+  - test
+  - build
+  - deploy
+
+variables:
+  DOCKER_REGISTRY: "registry.mirea.dev"
+  IMAGE_NAME: "$DOCKER_REGISTRY/group/main_service:latest"
+
+before_script:
+  # Установка Yandex CLI и авторизация
+  - curl -sSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh | bash
+  - export PATH=$PATH:/root/yandex-cloud/bin
+  - yc config set folder-id $YC_FOLDER_ID
+  - echo $YC_TOKEN | yc iam create-token
+  # Вход в Docker Registry
+  - echo $DOCKER_REGISTRY_PASSWORD | docker login -u $DOCKER_REGISTRY_USER --password-stdin $DOCKER_REGISTRY
+
+test:
+  stage: test
+  script:
+    # Установка зависимостей и запуск тестов
+    - pip install -r requirements.txt
+    - pytest
+
+build:
+  stage: build
+  script:
+    # Сборка Docker-образа
+    - docker build -t $IMAGE_NAME .
+    # Публикация образа в Docker Registry
+    - docker push $IMAGE_NAME
+
+deploy:
+  stage: deploy
+  script:
+    # Деплой Docker-образа в Yandex Cloud Serverless Containers
+    - yc container registry create --name main-service || true
+    - yc container image push $IMAGE_NAME
+    - yc serverless container create \
+        --name main-service \
+        --image $IMAGE_NAME \
+        --memory 512M \
+        --cores 1 \
+        --folder-id $YC_FOLDER_ID \
+        --service-account-id $YC_SERVICE_ACCOUNT_ID

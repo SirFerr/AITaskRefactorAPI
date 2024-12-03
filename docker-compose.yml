@@ -11,16 +11,16 @@ services:
       POSTGRES_DB: generation_db
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./MainService;'/init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - app-network
 
-  # Сервис для FastAPI приложения
-  app:
+  # Сервис для MainService;'
+  main_service:
     build:
-      context: ..
-      dockerfile: ./docker/Dockerfile
-    container_name: fastapi_app
+      context: MainService;'
+      dockerfile: MainService;'/Dockerfile
+    container_name: main_service
     ports:
       - "8001:8001"
     environment:
@@ -32,38 +32,41 @@ services:
     networks:
       - app-network
     volumes:
-      - ..:/app  # Монтируем весь проект в контейнер
+      - ./MainService;':/app  # Монтируем директорию MainService;' в контейнер
 
-  # Сервис для Notification Service (с уведомлениями)
+  # Сервис для NotiService
   notification_service:
     build:
-      context: ..
-      dockerfile: ./docker/Dockerfile.notification.yml  # Новый Dockerfile для Notification сервиса
+      context: ./NotiService
+      dockerfile: NotiService/Dockerfile
     container_name: notification_service
     ports:
-      - "8002:8002"  # Порт, через который WebSocket будет доступен
+      - "8002:8002"
     environment:
-      - RABBITMQ_URL="amqp://guest:guest@rabbitmq/"
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq/
     depends_on:
       - rabbitmq
     networks:
       - app-network
     volumes:
-      - ..:/app_noti  # Монтируем весь проект в контейнер
+      - ./NotiService:/app_noti  # Монтируем директорию NotiService в контейнер
 
+  # Сервис RabbitMQ
   rabbitmq:
     image: rabbitmq:3-management
+    container_name: rabbitmq
     ports:
       - "5672:5672"
       - "15672:15672"
     networks:
       - app-network
 
-
+# Определение сетей
 networks:
   app-network:
     driver: bridge
 
+# Определение томов
 volumes:
   postgres_data:
     driver: local
